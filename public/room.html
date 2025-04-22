@@ -2,82 +2,112 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Video Call Room</title>
-</head>
-<body>
-  <h2>Video Call Room</h2>
-  <video id="localVideo" autoplay muted playsinline></video>
-  <video id="remoteVideo" autoplay playsinline></video>
-
+  <title>Video Room</title>
+  <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
-  <script>
-    const urlParams = new URLSearchParams(window.location.search);
-    const room = urlParams.get('room');
-    if (!room) {
-      alert("Room ID missing! Redirecting...");
-      window.location.href = '/';
+</head>
+<body class="bg-gray-900 flex flex-col h-screen">
+  <div class="flex-1 flex items-center justify-center">
+    <video id="localVideo" autoplay muted playsinline class="w-1/2 rounded"></video>
+    <video id="remoteVideo" autoplay playsinline class="w-1/2 rounded"></video>
+  </div>
+
+  <div class="flex justify-center space-x-4 p-4 bg-gray-800">
+    <button id="muteButton" class="bg-blue-500 text-white px-4 py-2 rounded">Mute</button>
+    <button id="videoButton" class="bg-green-500 text-white px-4 py-2 rounded">Video Off</button>
+    <button onclick="disconnectCall()" class="bg-red-500 text-white px-4 py-2 rounded">Disconnect</button>
+  </div>
+
+<script>
+const socket = io("https://your-project-name.up.railway.app", { transports: ["websocket"] });
+const urlParams = new URLSearchParams(window.location.search);
+const room = urlParams.get('room');
+const localVideo = document.getElementById('localVideo');
+const remoteVideo = document.getElementById('remoteVideo');
+const muteButton = document.getElementById('muteButton');
+const videoButton = document.getElementById('videoButton');
+
+let localStream;
+let peerConnection;
+let audioMuted = false;
+let videoMuted = false;
+
+const config = {
+  iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+};
+
+async function start() {
+  localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+  localVideo.srcObject = localStream;
+
+  peerConnection = new RTCPeerConnection(config);
+
+  localStream.getTracks().forEach(track => {
+    peerConnection.addTrack(track, localStream);
+  });
+
+  peerConnection.ontrack = (event) => {
+    remoteVideo.srcObject = event.streams[0];
+  };
+
+  peerConnection.onicecandidate = (event) => {
+    if (event.candidate) {
+      socket.emit('ice_candidate', { room: room, candidate: event.candidate });
     }
+  };
+}
 
-    const socket = io("https://your-project-name.up.railway.app", { transports: ["websocket"] });
-    const localVideo = document.getElementById('localVideo');
-    const remoteVideo = document.getElementById('remoteVideo');
-    let localStream;
-    let peerConnection;
-    const config = {
-      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
-    };
+socket.on('connect', async () => {
+  socket.emit('join_room', { room: room });
+  await start();
+});
 
-    async function start() {
-      localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-      localVideo.srcObject = localStream;
+socket.on('offer', async (data) => {
+  await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
+  const answer = await peerConnection.createAnswer();
+  await peerConnection.setLocalDescription(answer);
+  socket.emit('answer', { room: room, answer: answer });
+});
 
-      peerConnection = new RTCPeerConnection(config);
+socket.on('answer', async (data) => {
+  await peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
+});
 
-      localStream.getTracks().forEach(track => {
-        peerConnection.addTrack(track, localStream);
-      });
+socket.on('ice-candidate', (data) => {
+  peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
+});
 
-      peerConnection.ontrack = (event) => {
-        remoteVideo.srcObject = event.streams[0];
-      };
+async function makeCall() {
+  const offer = await peerConnection.createOffer();
+  await peerConnection.setLocalDescription(offer);
+  socket.emit('offer', { room: room, offer: offer });
+}
 
-      peerConnection.onicecandidate = (event) => {
-        if (event.candidate) {
-          socket.emit('ice_candidate', { room: room, candidate: event.candidate });
-        }
-      };
-    }
+document.body.addEventListener('click', () => {
+  makeCall();
+}, { once: true });
 
-    socket.on('connect', async () => {
-      socket.emit('join_room', { room: room });
-      await start();
-    });
+muteButton.addEventListener('click', () => {
+  audioMuted = !audioMuted;
+  localStream.getAudioTracks()[0].enabled = !audioMuted;
+  muteButton.innerText = audioMuted ? "Unmute" : "Mute";
+});
 
-    socket.on('offer', async (data) => {
-      await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
-      const answer = await peerConnection.createAnswer();
-      await peerConnection.setLocalDescription(answer);
-      socket.emit('answer', { room: room, answer: answer });
-    });
+videoButton.addEventListener('click', () => {
+  videoMuted = !videoMuted;
+  localStream.getVideoTracks()[0].enabled = !videoMuted;
+  videoButton.innerText = videoMuted ? "Video On" : "Video Off";
+});
 
-    socket.on('answer', async (data) => {
-      await peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
-    });
+function disconnectCall() {
+  if (peerConnection) {
+    peerConnection.close();
+    peerConnection = null;
+    alert("Disconnected!");
+    window.location.href = "/";
+  }
+}
+</script>
 
-    socket.on('ice-candidate', (data) => {
-      peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
-    });
-
-    async function makeCall() {
-      const offer = await peerConnection.createOffer();
-      await peerConnection.setLocalDescription(offer);
-      socket.emit('offer', { room: room, offer: offer });
-    }
-
-    // Start call manually
-    document.body.addEventListener('click', () => {
-      makeCall();
-    });
-  </script>
 </body>
 </html>
