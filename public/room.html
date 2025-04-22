@@ -18,7 +18,7 @@
       window.location.href = '/';
     }
 
-    const socket = io();
+    const socket = io("https://your-project-name.up.railway.app", { transports: ["websocket"] });
     const localVideo = document.getElementById('localVideo');
     const remoteVideo = document.getElementById('remoteVideo');
     let localStream;
