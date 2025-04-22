@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Video Call Room</title>
+</head>
+<body>
+  <h2>Video Call Room</h2>
+  <video id="localVideo" autoplay muted playsinline></video>
+  <video id="remoteVideo" autoplay playsinline></video>
+
+  <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
+  <script>
+    const urlParams = new URLSearchParams(window.location.search);
+    const room = urlParams.get('room');
+    if (!room) {
+      alert("Room ID missing! Redirecting...");
+      window.location.href = '/';
+    }
+
+    const socket = io();
+    const localVideo = document.getElementById('localVideo');
+    const remoteVideo = document.getElementById('remoteVideo');
+    let localStream;
+    let peerConnection;
+    const config = {
+      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+    };
+
+    async function start() {
+      localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      localVideo.srcObject = localStream;
+
+      peerConnection = new RTCPeerConnection(config);
+
+      localStream.getTracks().forEach(track => {
+        peerConnection.addTrack(track, localStream);
+      });
+
+      peerConnection.ontrack = (event) => {
+        remoteVideo.srcObject = event.streams[0];
+      };
+
+      peerConnection.onicecandidate = (event) => {
+        if (event.candidate) {
+          socket.emit('ice_candidate', { room: room, candidate: event.candidate });
+        }
+      };
+    }
+
+    socket.on('connect', async () => {
+      socket.emit('join_room', { room: room });
+      await start();
+    });
+
+    socket.on('offer', async (data) => {
+      await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
+      const answer = await peerConnection.createAnswer();
+      await peerConnection.setLocalDescription(answer);
+      socket.emit('answer', { room: room, answer: answer });
+    });
+
+    socket.on('answer', async (data) => {
+      await peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
+    });
+
+    socket.on('ice-candidate', (data) => {
+      peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
+    });
+
+    async function makeCall() {
+      const offer = await peerConnection.createOffer();
+      await peerConnection.setLocalDescription(offer);
+      socket.emit('offer', { room: room, offer: offer });
+    }
+
+    // Start call manually
+    document.body.addEventListener('click', () => {
+      makeCall();
+    });
+  </script>
+</body>
+</html>
