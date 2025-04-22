@@ -11,7 +11,7 @@
 
   <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
   <script>
-    const socket = io();
+    const socket = io("https://privatevideocall.onrender.com", { transports: ["websocket"] });
     const localVideo = document.getElementById('localVideo');
     const remoteVideo = document.getElementById('remoteVideo');
     let localStream;
