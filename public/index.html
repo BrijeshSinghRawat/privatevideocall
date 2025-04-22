@@ -2,12 +2,15 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Start Video Call</title>
+  <title>Join Video Call Room</title>
+  <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body>
-  <h2>Private Video Call</h2>
-  <input type="text" id="roomInput" placeholder="Enter Room ID" />
-  <button onclick="joinRoom()">Join Room</button>
+<body class="flex items-center justify-center h-screen bg-gray-100">
+  <div class="text-center">
+    <h1 class="text-2xl mb-4">Join a Video Call</h1>
+    <input id="roomInput" type="text" placeholder="Enter Room ID" class="border rounded p-2" />
+    <button onclick="joinRoom()" class="bg-blue-500 text-white px-4 py-2 rounded ml-2">Join</button>
+  </div>
 
   <script>
     function joinRoom() {
@@ -15,7 +18,7 @@
       if (room) {
         window.location.href = `/room.html?room=${room}`;
       } else {
-        alert("Please enter a room ID!");
+        alert("Please enter a Room ID!");
       }
     }
   </script>
